@@ -64,9 +64,11 @@ async def register(data:Data):
     return{"message":"data found"}
 
 # ----------------------------      LOG IN      --------------------------
-
+class Login_data(BaseModel):
+    email:str
+    password:str
 @app.post("/login")
-async def login(data:Data):
+async def login(data:Login_data):
     user=USER_DATA.find_one({"email":data.email})
     if not user :
         raise HTTPException(status_code=400,detail="data not found")
