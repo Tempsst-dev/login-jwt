@@ -1,7 +1,7 @@
 # ------------------------------    IMPORT MODULES       ------------------------------------------#
 
-from fastapi import FastAPI , Header,HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI , Header,HTTPException,Query
+from pydantic import BaseModel,EmailStr
 from fastapi.middleware.cors import CORSMiddleware
 import bcrypt
 from jose import JWTError , jwt
@@ -15,7 +15,7 @@ app=FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://127.0.0.1:5000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,12 +38,13 @@ USER_DATA=CREAT_USERS["USER_DATA"]
 # =========== J.W.T ==============
 
 SECRET_KEY=os.getenv("SECRET_KEY")
-
+if not SECRET_KEY:
+    raise Exception("SECRET_KEY not found")
 # ----------------CALSS DATA-------------------
 class Data(BaseModel):
     name:str
     lastname:str
-    email:str
+    email:EmailStr
     password:str
 # ---------------------------------  DATA BASE CONECTE   ---------------------------------#
 @app.post("/register")
@@ -56,24 +57,28 @@ async def register(data:Data):
         "name":data.name,
         "lastname":data.lastname,
         "email":data.email,
-        "password":hash
+        "password":hash.decode("utf-8")
     }
+    existing_user = USER_DATA.find_one({"email": data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists")
  
     USER_DATA.insert_one(regester_data)
 
-    return{"message":"data found"}
+    return{"message":"User created successfully"}
 
 # ----------------------------      LOG IN      --------------------------
 class Login_data(BaseModel):
-    email:str
+    email:EmailStr
     password:str
 @app.post("/login")
-async def login(data:Login_data):
+async def login(data:Login_data ):
     user=USER_DATA.find_one({"email":data.email})
+    
     if not user :
         raise HTTPException(status_code=400,detail="data not found")
-    if not bcrypt.checkpw(data.password.encode("utf-8"),user["password"]):
-        raise HTTPException(status_code=401 , detail="password failed")
+    if not bcrypt.checkpw(data.password.encode("utf-8"),user["password"].encode("utf-8")):
+        raise HTTPException(status_code=401 , detail="Invalid password")
     token_data = {
         "user_id":str(user["_id"]),
         "name":user["name"],
@@ -96,7 +101,7 @@ async def profile(authorization:str = Header(None)):
     if not authorization :
         raise HTTPException(
             status_code=401,
-            detail="authoriation not found"
+            detail="Authorization header missing"
         )
     parts  = authorization.split(" ")
 
@@ -105,6 +110,9 @@ async def profile(authorization:str = Header(None)):
     token=parts[1]
     try:
         decode= jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        return{"message": decode}
+        return {
+    "user_id": decode["user_id"],
+    "email": decode["email"]
+}
     except JWTError:
         raise HTTPException(status_code=401,detail="data not found")
