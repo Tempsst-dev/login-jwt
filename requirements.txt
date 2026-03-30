@@ -1,3 +1,7 @@
 uvicorn
 fastapi
 bcrypt
+python-jose
+pymongo
+python-dotenv
+pydantic
